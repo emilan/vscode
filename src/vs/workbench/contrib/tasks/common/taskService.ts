@@ -67,6 +67,7 @@ export interface ITaskService {
 	isReconnected: boolean;
 	onDidReconnectToTasks: Event<void>;
 	supportsMultipleTaskExecutions: boolean;
+	onTaskSettingsChanged: Event<void>;
 
 	configureAction(): Action;
 	run(task: Task | undefined, options?: IProblemMatcherRunOptions): Promise<ITaskSummary | undefined>;

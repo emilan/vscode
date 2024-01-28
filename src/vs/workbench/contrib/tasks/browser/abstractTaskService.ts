@@ -233,6 +233,9 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 	public onDidReconnectToTasks: Event<void> = this._onDidReconnectToTasks.event;
 	public get isReconnected(): boolean { return this._tasksReconnected; }
 
+	private _onTaskSettingsChanged: Emitter<void> = new Emitter();
+	public onTaskSettingsChanged: Event<void> = this._onTaskSettingsChanged.event;
+
 	constructor(
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IMarkerService protected readonly _markerService: IMarkerService,
@@ -289,7 +292,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			this._updateSetup(folderSetup);
 			return this._updateWorkspaceTasks(TaskRunSource.FolderOpen);
 		}));
-		this._register(this._configurationService.onDidChangeConfiguration((e) => {
+		this._register(this._configurationService.onDidChangeConfiguration(async (e) => {
 			if (!e.affectsConfiguration('tasks') || (!this._taskSystem && !this._workspaceTasksPromise)) {
 				return;
 			}
@@ -306,7 +309,9 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			}
 
 			this._setTaskLRUCacheLimit();
-			return this._updateWorkspaceTasks(TaskRunSource.ConfigurationChange);
+			await this._updateWorkspaceTasks(TaskRunSource.ConfigurationChange);
+
+			this._onTaskSettingsChanged.fire();
 		}));
 		this._taskRunningState = TASK_RUNNING_STATE.bindTo(_contextKeyService);
 		this._onDidStateChange = this._register(new Emitter());
@@ -2247,6 +2252,8 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 	}
 
 	public async getWorkspaceTasks(runSource: TaskRunSource = TaskRunSource.User): Promise<Map<string, IWorkspaceFolderTaskResult>> {
+		this._logService.info(`getWorkspaceTasks runSource=${runSource}`);
+
 		if (!(await this._trust())) {
 			return new Map();
 		}
@@ -2261,6 +2268,8 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 	}
 
 	private _updateWorkspaceTasks(runSource: TaskRunSource = TaskRunSource.User): Promise<Map<string, IWorkspaceFolderTaskResult>> {
+		this._logService.info(`_updateWorkspaceTasks runSource=${runSource}`);
+
 		this._workspaceTasksPromise = this._computeWorkspaceTasks(runSource);
 		return this._workspaceTasksPromise;
 	}
@@ -2307,7 +2316,12 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 	}
 
 	private async _computeWorkspaceFolderTasks(workspaceFolder: IWorkspaceFolder, runSource: TaskRunSource = TaskRunSource.User): Promise<IWorkspaceFolderTaskResult> {
+		this._logService.info(`_computeWorkspaceFolderTasks runSource=${runSource}`);
+
 		const workspaceFolderConfiguration = (this._executionEngine === ExecutionEngine.Process ? await this._computeLegacyConfiguration(workspaceFolder) : await this._computeConfiguration(workspaceFolder));
+
+		this._logService.info(`_computeWorkspaceFolderTasks::workspaceFolderConfiguration: ${JSON.stringify(workspaceFolderConfiguration, null, 2)}`);
+
 		if (!workspaceFolderConfiguration || !workspaceFolderConfiguration.config || workspaceFolderConfiguration.hasErrors) {
 			return Promise.resolve({ workspaceFolder, set: undefined, configurations: undefined, hasErrors: workspaceFolderConfiguration ? workspaceFolderConfiguration.hasErrors : false });
 		}

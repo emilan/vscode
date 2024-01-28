@@ -44,15 +44,48 @@ export class RunAutomaticTasks extends Disposable implements IWorkbenchContribut
 			return;
 		}
 		this._hasRunTasks = true;
-		this._logService.trace('RunAutomaticTasks: Trying to run tasks.');
+		this._logService.info('RunAutomaticTasks: Trying to run tasks.');
 		// Wait until we have task system info (the extension host and workspace folders are available).
 		if (!this._taskService.hasTaskSystemInfo) {
-			this._logService.trace('RunAutomaticTasks: Awaiting task system info.');
+			this._logService.info('RunAutomaticTasks: Awaiting task system info.');
 			await Event.toPromise(Event.once(this._taskService.onDidChangeTaskSystemInfo));
 		}
-		const workspaceTasks = await this._taskService.getWorkspaceTasks(TaskRunSource.FolderOpen);
-		this._logService.trace(`RunAutomaticTasks: Found ${workspaceTasks.size} automatic tasks`);
-		await this._runWithPermission(this._taskService, this._configurationService, workspaceTasks);
+		let workspaceTasks = await this._taskService.getWorkspaceTasks(TaskRunSource.FolderOpen);
+		this._logService.info(`RunAutomaticTasks: Found ${workspaceTasks.size} automatic tasks`);
+
+		let autoTasks = this._findAutoTasks(this._taskService, workspaceTasks);
+		this._logService.info(`RunAutomaticTasks: taskNames=${JSON.stringify(autoTasks.taskNames)}`);
+
+		// As seen in some cases with the Remote SSH extension, the tasks configuration is loaded after we have come
+		// to this point. Let's give it some extra time.
+		if (autoTasks.taskNames.length === 0) {
+			const updatedWithinTimeout = await Promise.race([
+				new Promise<boolean>((resolve) => {
+					Event.toPromise(Event.once(this._taskService.onTaskSettingsChanged)).then(() => resolve(true));
+				}),
+				new Promise<boolean>((resolve) => {
+					const timer = setTimeout(() => { clearTimeout(timer); resolve(false); }, 10000);
+				})]);
+
+			if (!updatedWithinTimeout) {
+				this._logService.info(`RunAutomaticTasks: waited some extra time, but no update of tasks configuration`);
+				return;
+			}
+
+			workspaceTasks = await this._taskService.getWorkspaceTasks(TaskRunSource.FolderOpen);
+			autoTasks = this._findAutoTasks(this._taskService, workspaceTasks);
+			this._logService.info(`RunAutomaticTasks: updated taskNames=${JSON.stringify(autoTasks.taskNames)}`);
+		}
+
+		if (autoTasks.taskNames.length === 0) {
+			return;
+		}
+
+		if (this._configurationService.getValue(ALLOW_AUTOMATIC_TASKS) === 'off') {
+			return;
+		}
+
+		this._runTasks(this._taskService, autoTasks.tasks);
 	}
 
 	private _runTasks(taskService: ITaskService, tasks: Array<Task | Promise<Task | undefined>>) {
@@ -122,19 +155,6 @@ export class RunAutomaticTasks extends Disposable implements IWorkbenchContribut
 			});
 		}
 		return { tasks, taskNames, locations };
-	}
-
-	private async _runWithPermission(taskService: ITaskService, configurationService: IConfigurationService, workspaceTaskResult: Map<string, IWorkspaceFolderTaskResult>) {
-
-		const { tasks, taskNames } = this._findAutoTasks(taskService, workspaceTaskResult);
-
-		if (taskNames.length === 0) {
-			return;
-		}
-		if (configurationService.getValue(ALLOW_AUTOMATIC_TASKS) === 'off') {
-			return;
-		}
-		this._runTasks(taskService, tasks);
 	}
 }
 
