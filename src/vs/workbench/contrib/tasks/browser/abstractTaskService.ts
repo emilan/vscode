@@ -2247,6 +2247,8 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 	}
 
 	public async getWorkspaceTasks(runSource: TaskRunSource = TaskRunSource.User): Promise<Map<string, IWorkspaceFolderTaskResult>> {
+		this._logService.info(`getWorkspaceTasks runSource=${runSource}`);
+
 		if (!(await this._trust())) {
 			return new Map();
 		}
@@ -2261,6 +2263,8 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 	}
 
 	private _updateWorkspaceTasks(runSource: TaskRunSource = TaskRunSource.User): Promise<Map<string, IWorkspaceFolderTaskResult>> {
+		this._logService.info(`_updateWorkspaceTasks runSource=${runSource}`);
+
 		this._workspaceTasksPromise = this._computeWorkspaceTasks(runSource);
 		return this._workspaceTasksPromise;
 	}
@@ -2307,7 +2311,12 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 	}
 
 	private async _computeWorkspaceFolderTasks(workspaceFolder: IWorkspaceFolder, runSource: TaskRunSource = TaskRunSource.User): Promise<IWorkspaceFolderTaskResult> {
+		this._logService.info(`_computeWorkspaceFolderTasks runSource=${runSource}`);
+
 		const workspaceFolderConfiguration = (this._executionEngine === ExecutionEngine.Process ? await this._computeLegacyConfiguration(workspaceFolder) : await this._computeConfiguration(workspaceFolder));
+
+		this._logService.info(`_computeWorkspaceFolderTasks::workspaceFolderConfiguration: ${JSON.stringify(workspaceFolderConfiguration, null, 2)}`);
+
 		if (!workspaceFolderConfiguration || !workspaceFolderConfiguration.config || workspaceFolderConfiguration.hasErrors) {
 			return Promise.resolve({ workspaceFolder, set: undefined, configurations: undefined, hasErrors: workspaceFolderConfiguration ? workspaceFolderConfiguration.hasErrors : false });
 		}

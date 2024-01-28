@@ -44,14 +44,14 @@ export class RunAutomaticTasks extends Disposable implements IWorkbenchContribut
 			return;
 		}
 		this._hasRunTasks = true;
-		this._logService.trace('RunAutomaticTasks: Trying to run tasks.');
+		this._logService.info('RunAutomaticTasks: Trying to run tasks.');
 		// Wait until we have task system info (the extension host and workspace folders are available).
 		if (!this._taskService.hasTaskSystemInfo) {
-			this._logService.trace('RunAutomaticTasks: Awaiting task system info.');
+			this._logService.info('RunAutomaticTasks: Awaiting task system info.');
 			await Event.toPromise(Event.once(this._taskService.onDidChangeTaskSystemInfo));
 		}
 		const workspaceTasks = await this._taskService.getWorkspaceTasks(TaskRunSource.FolderOpen);
-		this._logService.trace(`RunAutomaticTasks: Found ${workspaceTasks.size} automatic tasks`);
+		this._logService.info(`RunAutomaticTasks: Found ${workspaceTasks.size} automatic tasks`);
 		await this._runWithPermission(this._taskService, this._configurationService, workspaceTasks);
 	}
 
@@ -127,6 +127,8 @@ export class RunAutomaticTasks extends Disposable implements IWorkbenchContribut
 	private async _runWithPermission(taskService: ITaskService, configurationService: IConfigurationService, workspaceTaskResult: Map<string, IWorkspaceFolderTaskResult>) {
 
 		const { tasks, taskNames } = this._findAutoTasks(taskService, workspaceTaskResult);
+
+		this._logService.info(`_runWithPermission::taskNames=${JSON.stringify(taskNames)}`);
 
 		if (taskNames.length === 0) {
 			return;
